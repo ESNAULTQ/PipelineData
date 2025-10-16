@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  pipeline-data:
+    build: .
+    container_name: pipeline-data-app
+    volumes:
+      # Monter le dossier data pour persister les données téléchargées
+      - ./data:/app/data
+    environment:
+      # Variables d'environnement (ajoutez selon vos besoins)
+      - PYTHONUNBUFFERED=1
+    # Pour exécuter en mode interactif ou en arrière-plan
+    # stdin_open: true
+    # tty: true
+    # restart: unless-stopped
