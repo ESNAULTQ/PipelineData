@@ -1,33 +1,39 @@
-name: 🚀 Semantic Release
+name: release
 
 on:
   push:
     branches:
-      - develop # ou "master" selon ta convention
-
-permissions:
-  contents: write # pour créer des tags et releases
-  issues: write # pour commenter les issues
-  pull-requests: write # pour commenter les PR
+      - develop
 
 jobs:
-  release:
-    name: Release
-    runs-on: ubuntu-latest
 
+  release:
+    name: Release Semantic
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 20
+          node-version: '20'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies for npm
+        run: |
+          npm install
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
 
       - name: Run Semantic Release
+        run: |
+          npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
