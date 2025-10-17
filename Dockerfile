@@ -20,4 +20,4 @@ RUN mkdir -p data/raw
 # EXPOSE 8000
 
 # Commande par défaut
-CMD ["python", "src/download_data.py"]
+CMD ["python", "src/import_data.py"]
