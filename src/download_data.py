@@ -22,24 +22,23 @@ class NYCTaxiDataDownloader:
             if self.file_exists(month):
                 print(f"File for month {month} already exists")
                 return True
-            
-            # URL correcte pour télécharger les données NYC Taxi
-            url = f"https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_{self.YEAR}-{month:02d}.parquet"
-            
-            response = requests.get(url, stream=True, timeout=30)
-            response.raise_for_status()
-            
-            # Créer le répertoire s'il n'existe pas
-            file_path = self.get_file_path(month)
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Sauvegarder le fichier
-            with open(file_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            
-            print(f"File for month {month} downloaded successfully to {file_path}")
-            return True
+            else:
+                url = f"https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_{self.YEAR}-{month:02d}.parquet"
+                
+                response = requests.get(url, stream=True, timeout=30)
+                response.raise_for_status()
+                
+                # Créer le répertoire s'il n'existe pas
+                file_path = self.get_file_path(month)
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Sauvegarder le fichier
+                with open(file_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                
+                print(f"File for month {month} downloaded successfully to {file_path}")
+                return True
 
         except requests.exceptions.RequestException as e:
             print(f"Error downloading file for month {month}: {e}")
@@ -49,10 +48,9 @@ class NYCTaxiDataDownloader:
         month_actuel = datetime.datetime.now().month
         for month in range(1, month_actuel - 1):
             if self.download_month(month):
-                print(f"File for month {month} downloaded successfully")
+                pass
             else:
                 print(f"Error downloading file for month {month}")
-                return False
         return True
 
 nyt = NYCTaxiDataDownloader(2025, 1)
