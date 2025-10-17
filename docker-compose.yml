@@ -1,0 +1,9 @@
+version: "3.8"
+services:
+  pipeline-data:
+    build: .
+    container_name: pipeline-data-app
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
