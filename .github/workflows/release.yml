@@ -36,8 +36,4 @@ jobs:
         run: |
           npx semantic-release
         env:
-<<<<<<< HEAD
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-=======
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
->>>>>>> 5ae72645f85a7d2868d8f439662e187182099db2
