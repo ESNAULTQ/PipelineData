@@ -20,4 +20,4 @@ RUN mkdir -p data/raw
 # EXPOSE 8000
 
 # Commande par défaut
-CMD ["python", "src/download_data.py"]
+CMD ["/bin/sh", "-c", "python src/download_data.py && python src/import_data_postgres.py"]
