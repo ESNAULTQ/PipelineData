@@ -26,10 +26,15 @@ jobs:
           enable-cache: true
       
       - name: Set up Python
-        uses: actions/setup-python@v
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       
+      - name: Initialize uv.lock if missing
+        run: |
+          if [ ! -f uv.lock ]; then
+            uv lock
+          fi
       
       - name: Install dependencies
         run: |
