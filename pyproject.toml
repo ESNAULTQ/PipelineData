@@ -1,0 +1,79 @@
+# =============================================================================
+# MÉTADONNÉES DU PROJET
+# =============================================================================
+# Cette section contient les informations de base sur votre package Python
+[project]
+# Nom du package tel qu'il apparaîtra sur PyPI et pour 'pip install'
+name = "PipelineData"
+
+# Version actuelle du package - ATTENTION: Cette valeur est automatiquement
+# mise à jour par semantic-release lors d'un release. Ne la modifiez pas manuellement.
+version = "1.0.0-rc.1"
+
+
+# Description courte qui apparaît dans les métadonnées du package
+description = "Semantic release for Python packages"
+
+# Fichier README qui sera affiché sur PyPI
+# IMPORTANT: Ce fichier doit exister et le nom est case-sensitive (README.md, pas Readme.md)
+readme = "README.md"
+
+# Version minimale de Python requise pour utiliser ce package
+requires-python = ">=3.13"
+dependencies = [
+    "fastparquet>=2024.11.0",
+    "pandas>=2.3.3",
+    "pyarrow>=21.0.0",
+    "requests>=2.32.5",
+]
+[project.urls]
+Repository = "https://github.com/ESNAULTQ/PipelineData"
+
+
+# =============================================================================
+# CONFIGURATION DU SYSTÈME DE BUILD
+# =============================================================================
+# Définit quel outil est utilisé pour construire le package
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+# =============================================================================
+# SEMANTIC RELEASE - CONFIGURATION PRINCIPALE
+# =============================================================================
+# Semantic Release automatise la gestion des versions basée sur les commits
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+build_command = "uv build"
+major_on_zero = false
+tag_format = "v{version}"
+
+# =============================================================================
+# SEMANTIC RELEASE - CONFIGURATION DES BRANCHES
+# =============================================================================
+# Définit comment chaque branche gère les releases
+
+# BRANCHE MAIN - Versions stables (production)
+[tool.semantic_release.branches.main]
+match = "main"                    # Nom de la branche à matcher
+prerelease = false                # false = versions stables (1.0.0, 1.1.0, 2.0.0)
+
+
+# BRANCHE DEVELOP - Versions de pré-release (RC = Release Candidate)
+[tool.semantic_release.branches.develop]
+match = "develop"                 # Nom de la branche à matcher
+prerelease = true                 # true = versions avec suffixe
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["feat", "fix", "perf", "refactor"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf", "refactor"]
+
+[tool.semantic_release.changelog]
+exclude_commit_patterns = []
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
