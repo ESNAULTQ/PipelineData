@@ -5,6 +5,8 @@ import logging
 import os
 from sqlalchemy import create_engine, text
 import psycopg2
+import pyarrow.parquet as pq
+import pyarrow.dataset as ds
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -13,6 +15,9 @@ logger = logging.getLogger(__name__)
 class NYCTaxiDataImporterPostgres:
     def __init__(self):
         self.DATA_DIR = "data/raw"
+        # Paramètres de streaming ajustables via env
+        self.PARQUET_BATCH_SIZE = int(os.getenv('PARQUET_BATCH_SIZE', '500000'))  # lignes par batch PyArrow
+        self.SQL_CHUNK_SIZE = int(os.getenv('SQL_CHUNK_SIZE', '100000'))          # lignes par insert pandas
         
         # Configuration de la base de données PostgreSQL
         self.POSTGRES_USER = os.getenv('POSTGRES_USER', 'postgres')
@@ -58,18 +63,20 @@ class NYCTaxiDataImporterPostgres:
                 )
             """))
             
-            # Créer la table principale des données de taxi si elle n'existe pas
+            # Recréer la table principale avec un schéma robuste (id auto et noms en minuscules)
+            conn.execute(text("DROP TABLE IF EXISTS yellow_taxi_trips"))
             conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS yellow_taxi_trips (
-                VendorID SERIAL PRIMARY KEY,
+            CREATE TABLE yellow_taxi_trips (
+                id SERIAL PRIMARY KEY,
+                vendorid INTEGER,
                 tpep_pickup_datetime TIMESTAMP,
                 tpep_dropoff_datetime TIMESTAMP,
                 passenger_count DOUBLE PRECISION,
                 trip_distance DOUBLE PRECISION,
-                RatecodeID DOUBLE PRECISION,
+                ratecodeid DOUBLE PRECISION,
                 store_and_fwd_flag VARCHAR(1),
-                PULocationID INTEGER,
-                DOLocationID INTEGER,
+                pulocationid INTEGER,
+                dolocationid INTEGER,
                 payment_type INTEGER,
                 fare_amount DOUBLE PRECISION,
                 extra DOUBLE PRECISION,
@@ -100,7 +107,7 @@ class NYCTaxiDataImporterPostgres:
             return False
 
     def import_file(self, file_path: Path) -> bool:
-        """Import a single Parquet file into PostgreSQL"""
+        """Import d'un fichier Parquet vers PostgreSQL en streaming (faible mémoire)"""
         file_name = file_path.name
         
         if self._is_file_imported(file_name):
@@ -108,22 +115,35 @@ class NYCTaxiDataImporterPostgres:
             return True
 
         try:
-            # Lire le fichier Parquet avec pandas
-            logger.info(f"Lecture du fichier {file_name}")
-            df = pd.read_parquet(file_path)
-            
-            # Nettoyer les données si nécessaire
-            df = self._clean_data(df)
-            
-            # Importer les données dans PostgreSQL
-            logger.info(f"Import des données de {file_name} vers PostgreSQL")
-            df.to_sql(
-                'yellow_taxi_trips', 
-                self.engine, 
-                if_exists='append', 
-                index=False,
-                method='multi'
-            )
+            logger.info(f"Lecture en flux du fichier {file_name} (batch={self.PARQUET_BATCH_SIZE})")
+
+            # Utiliser PyArrow pour itérer par batches sans charger tout le fichier
+            parquet_file = pq.ParquetFile(str(file_path))
+            total_rows = parquet_file.metadata.num_rows if parquet_file.metadata is not None else None
+            processed_rows = 0
+
+            for batch in parquet_file.iter_batches(batch_size=self.PARQUET_BATCH_SIZE):
+                # Conversion en DataFrame pandas par batch
+                df_batch = batch.to_pandas(types_mapper=self._arrow_types_mapper)
+
+                # Nettoyage léger sur le batch
+                df_batch = self._clean_data(df_batch)
+
+                # Écriture par morceaux pour limiter la mémoire et la taille des requêtes
+                df_batch.to_sql(
+                    'yellow_taxi_trips',
+                    self.engine,
+                    if_exists='append',
+                    index=False,
+                    method='multi',
+                    chunksize=self.SQL_CHUNK_SIZE
+                )
+
+                processed_rows += len(df_batch)
+                if total_rows is not None:
+                    logger.info(f"Progression {file_name}: {processed_rows}/{total_rows} lignes")
+                else:
+                    logger.info(f"Progression {file_name}: {processed_rows} lignes traitées")
 
             # Enregistrer l'import réussi
             with self.engine.connect() as conn:
@@ -165,19 +185,62 @@ class NYCTaxiDataImporterPostgres:
             return False
 
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Clean and prepare data for import"""
+        """Nettoie et harmonise les colonnes pour correspondre au schéma SQL (minuscules)."""
+        # Uniformiser les noms de colonnes en minuscules
+        df.columns = [str(c).lower() for c in df.columns]
+
+        # Harmoniser quelques variantes connues
+        rename_map = {
+            'airport_fee$': 'airport_fee',
+        }
+        df = df.rename(columns=rename_map)
+
+        # Colonnes attendues par la table cible (ordre contrôlé)
+        allowed_columns = [
+            'vendorid',
+            'tpep_pickup_datetime',
+            'tpep_dropoff_datetime',
+            'passenger_count',
+            'trip_distance',
+            'ratecodeid',
+            'store_and_fwd_flag',
+            'pulocationid',
+            'dolocationid',
+            'payment_type',
+            'fare_amount',
+            'extra',
+            'mta_tax',
+            'tip_amount',
+            'tolls_amount',
+            'improvement_surcharge',
+            'total_amount',
+            'congestion_surcharge',
+            'airport_fee',
+            'cbd_congestion_fee',
+        ]
+        existing_columns = [c for c in allowed_columns if c in df.columns]
+        df = df[existing_columns]
+
         # Supprimer les lignes avec des valeurs nulles dans les colonnes critiques
-        critical_columns = ['tpep_pickup_datetime', 'tpep_dropoff_datetime']
-        df = df.dropna(subset=critical_columns)
+        critical_columns = [c for c in ['tpep_pickup_datetime', 'tpep_dropoff_datetime'] if c in df.columns]
+        if critical_columns:
+            df = df.dropna(subset=critical_columns)
         
         # Convertir les types de données si nécessaire
-        try:
-            df['tpep_pickup_datetime'] = pd.to_datetime(df['tpep_pickup_datetime'])
-            df['tpep_dropoff_datetime'] = pd.to_datetime(df['tpep_dropoff_datetime'])
-        except Exception as e:
-            logger.warning(f"Erreur lors de la conversion des dates: {e}")
+        for col in ['tpep_pickup_datetime', 'tpep_dropoff_datetime']:
+            if col in df.columns:
+                try:
+                    df[col] = pd.to_datetime(df[col])
+                except Exception as e:
+                    logger.warning(f"Erreur lors de la conversion de {col}: {e}")
         
         return df
+
+    @staticmethod
+    def _arrow_types_mapper(pa_type):
+        """Mapper optionnel des types Arrow vers pandas pour une meilleure compatibilité."""
+        # Laisser pandas décider par défaut; ce hook existe pour étendre si besoin.
+        return None
 
     def import_all_files(self) -> bool:
         """Import all Parquet files from the data directory"""
