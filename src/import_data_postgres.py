@@ -64,9 +64,8 @@ class NYCTaxiDataImporterPostgres:
             """))
             
             # Recréer la table principale avec un schéma robuste (id auto et noms en minuscules)
-            conn.execute(text("DROP TABLE IF EXISTS yellowtaxitrip"))
             conn.execute(text("""
-            CREATE TABLE yellowtaxitrip (
+            CREATE TABLE IF NOT EXISTS yellowtaxitrip (
                 id SERIAL PRIMARY KEY,
                 vendorid INTEGER,
                 tpep_pickup_datetime TIMESTAMP,
