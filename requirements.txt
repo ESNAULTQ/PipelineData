@@ -4,4 +4,9 @@ pyarrow==15.0.0
 fastparquet==2024.2.0
 duckdb==0.10.0
 psycopg2-binary==2.9.9
-sqlalchemy==2.0.25
+sqlalchemy==2.0.34
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.9.2
+pydantic-settings==2.1.0
+sqlmodel==0.0.22

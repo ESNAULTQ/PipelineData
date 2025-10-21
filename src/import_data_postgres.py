@@ -16,7 +16,7 @@ class NYCTaxiDataImporterPostgres:
     def __init__(self):
         self.DATA_DIR = "data/raw"
         # Paramètres de streaming ajustables via env
-        self.PARQUET_BATCH_SIZE = int(os.getenv('PARQUET_BATCH_SIZE', '500000'))  # lignes par batch PyArrow
+        self.PARQUET_BATCH_SIZE = int(os.getenv('PARQUET_BATCH_SIZE', '100000'))  # lignes par batch PyArrow
         self.SQL_CHUNK_SIZE = int(os.getenv('SQL_CHUNK_SIZE', '100000'))          # lignes par insert pandas
         
         # Configuration de la base de données PostgreSQL
@@ -56,7 +56,7 @@ class NYCTaxiDataImporterPostgres:
         with engine.connect() as conn:
             # Créer la table de log d'import si elle n'existe pas
             conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS import_log (
+                CREATE TABLE IF NOT EXISTS importlog (
                     file_name VARCHAR(255) PRIMARY KEY,
                     import_date TIMESTAMP NOT NULL,
                     status VARCHAR(50) NOT NULL
@@ -64,9 +64,8 @@ class NYCTaxiDataImporterPostgres:
             """))
             
             # Recréer la table principale avec un schéma robuste (id auto et noms en minuscules)
-            conn.execute(text("DROP TABLE IF EXISTS yellow_taxi_trips"))
             conn.execute(text("""
-            CREATE TABLE yellow_taxi_trips (
+            CREATE TABLE IF NOT EXISTS yellowtaxitrip (
                 id SERIAL PRIMARY KEY,
                 vendorid INTEGER,
                 tpep_pickup_datetime TIMESTAMP,
@@ -98,7 +97,7 @@ class NYCTaxiDataImporterPostgres:
         try:
             with self.engine.connect() as conn:
                 result = conn.execute(text(
-                    "SELECT status FROM import_log WHERE file_name = :file_name"
+                    "SELECT status FROM importlog WHERE file_name = :file_name"
                 ), {"file_name": file_name}).fetchone()
                 
                 return result is not None and result[0] == 'success'
@@ -131,7 +130,7 @@ class NYCTaxiDataImporterPostgres:
 
                 # Écriture par morceaux pour limiter la mémoire et la taille des requêtes
                 df_batch.to_sql(
-                    'yellow_taxi_trips',
+                    'yellowtaxitrip',
                     self.engine,
                     if_exists='append',
                     index=False,
@@ -148,7 +147,7 @@ class NYCTaxiDataImporterPostgres:
             # Enregistrer l'import réussi
             with self.engine.connect() as conn:
                 conn.execute(text("""
-                    INSERT INTO import_log (file_name, import_date, status)
+                    INSERT INTO importlog (file_name, import_date, status)
                     VALUES (:file_name, :import_date, :status)
                     ON CONFLICT (file_name) DO UPDATE 
                     SET import_date = excluded.import_date, status = excluded.status
@@ -169,7 +168,7 @@ class NYCTaxiDataImporterPostgres:
             try:
                 with self.engine.connect() as conn:
                     conn.execute(text("""
-                        INSERT INTO import_log (file_name, import_date, status)
+                        INSERT INTO importlog (file_name, import_date, status)
                         VALUES (:file_name, :import_date, :status)
                         ON CONFLICT (file_name) DO UPDATE 
                         SET import_date = excluded.import_date, status = excluded.status
@@ -274,13 +273,13 @@ class NYCTaxiDataImporterPostgres:
                     SELECT 
                         status,
                         COUNT(*) as count
-                    FROM import_log 
+                    FROM importlog 
                     GROUP BY status
                 """)).fetchall()
                 
                 # Nombre total de voyages
                 total_trips = conn.execute(text("""
-                    SELECT COUNT(*) FROM yellow_taxi_trips
+                    SELECT COUNT(*) FROM yellowtaxitrip
                 """)).fetchone()[0]
                 
                 logger.info("=== Statistiques d'import ===")
