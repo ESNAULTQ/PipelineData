@@ -1,137 +1,8 @@
 from sqlmodel import Session, select, func
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import datetime
-from src.models.models import YellowTaxiTrip, ImportLog
+from src.models.models import YellowTaxiTrip, ImportLog, TaxiTripCreate, TaxiTripUpdate, Statistics
 from src.database import engine
-
-
-class YellowTaxiTripCRUD:
-    """CRUD operations for YellowTaxiTrip model"""
-    
-    @staticmethod
-    def create_trip(session: Session, trip_data: dict) -> YellowTaxiTrip:
-        """Créer un nouveau voyage taxi"""
-        trip = YellowTaxiTrip(**trip_data)
-        session.add(trip)
-        session.commit()
-        session.refresh(trip)
-        return trip
-    
-    @staticmethod
-    def get_trip_by_id(session: Session, trip_id: int) -> Optional[YellowTaxiTrip]:
-        """Récupérer un voyage par son ID"""
-        return session.get(YellowTaxiTrip, trip_id)
-    
-    @staticmethod
-    def get_all_trips(session: Session, skip: int = 0, limit: int = 100) -> List[YellowTaxiTrip]:
-        """Récupérer tous les voyages avec pagination"""
-        statement = select(YellowTaxiTrip).offset(skip).limit(limit)
-        return session.exec(statement).all()
-    
-    @staticmethod
-    def update_trip(session: Session, trip_id: int, trip_data: dict) -> Optional[YellowTaxiTrip]:
-        """Mettre à jour un voyage"""
-        trip = session.get(YellowTaxiTrip, trip_id)
-        if trip:
-            for key, value in trip_data.items():
-                setattr(trip, key, value)
-            session.commit()
-            session.refresh(trip)
-        return trip
-    
-    @staticmethod
-    def delete_trip(session: Session, trip_id: int) -> bool:
-        """Supprimer un voyage"""
-        trip = session.get(YellowTaxiTrip, trip_id)
-        if trip:
-            session.delete(trip)
-            session.commit()
-            return True
-        return False
-    
-    @staticmethod
-    def get_trips_by_date_range(session: Session, start_date: datetime, end_date: datetime) -> List[YellowTaxiTrip]:
-        """Récupérer les voyages dans une plage de dates"""
-        statement = select(YellowTaxiTrip).where(
-            YellowTaxiTrip.tpep_pickup_datetime >= start_date,
-            YellowTaxiTrip.tpep_pickup_datetime <= end_date
-        )
-        return session.exec(statement).all()
-    
-    @staticmethod
-    def get_trips_by_location(session: Session, pickup_location: int, dropoff_location: int = None) -> List[YellowTaxiTrip]:
-        """Récupérer les voyages par localisation"""
-        statement = select(YellowTaxiTrip).where(YellowTaxiTrip.pulocationid == pickup_location)
-        if dropoff_location:
-            statement = statement.where(YellowTaxiTrip.dolocationid == dropoff_location)
-        return session.exec(statement).all()
-    
-    @staticmethod
-    def get_trips_by_payment_type(session: Session, payment_type: int) -> List[YellowTaxiTrip]:
-        """Récupérer les voyages par type de paiement"""
-        statement = select(YellowTaxiTrip).where(YellowTaxiTrip.payment_type == payment_type)
-        return session.exec(statement).all()
-    
-    @staticmethod
-    def get_trips_by_distance_range(session: Session, min_distance: float, max_distance: float) -> List[YellowTaxiTrip]:
-        """Récupérer les voyages par distance"""
-        statement = select(YellowTaxiTrip).where(
-            YellowTaxiTrip.trip_distance >= min_distance,
-            YellowTaxiTrip.trip_distance <= max_distance
-        )
-        return session.exec(statement).all()
-    
-    @staticmethod
-    def get_trips_by_fare_range(session: Session, min_fare: float, max_fare: float) -> List[YellowTaxiTrip]:
-        """Récupérer les voyages par montant de course"""
-        statement = select(YellowTaxiTrip).where(
-            YellowTaxiTrip.total_amount >= min_fare,
-            YellowTaxiTrip.total_amount <= max_fare
-        )
-        return session.exec(statement).all()
-    
-    @staticmethod
-    def get_trips_with_passengers(session: Session, min_passengers: int = 1) -> List[YellowTaxiTrip]:
-        """Récupérer les voyages avec passagers"""
-        statement = select(YellowTaxiTrip).where(YellowTaxiTrip.passenger_count >= min_passengers)
-        return session.exec(statement).all()
-    
-    @staticmethod
-    def get_statistics(session: Session) -> dict:
-        """Récupérer les statistiques générales"""
-        total_trips = session.exec(select(func.count(YellowTaxiTrip.id))).one()
-        avg_distance = session.exec(select(func.avg(YellowTaxiTrip.trip_distance))).one()
-        avg_fare = session.exec(select(func.avg(YellowTaxiTrip.total_amount))).one()
-        avg_passengers = session.exec(select(func.avg(YellowTaxiTrip.passenger_count))).one()
-        
-        return {
-            "total_trips": total_trips,
-            "average_distance": avg_distance,
-            "average_fare": avg_fare,
-            "average_passengers": avg_passengers
-        }
-    
-    @staticmethod
-    def get_top_pickup_locations(session: Session, limit: int = 10) -> List[dict]:
-        """Récupérer les principales zones de prise en charge"""
-        statement = select(
-            YellowTaxiTrip.pulocationid,
-            func.count(YellowTaxiTrip.id).label("trip_count")
-        ).group_by(YellowTaxiTrip.pulocationid).order_by(func.count(YellowTaxiTrip.id).desc()).limit(limit)
-        
-        results = session.exec(statement).all()
-        return [{"location_id": r.pulocationid, "trip_count": r.trip_count} for r in results]
-    
-    @staticmethod
-    def get_top_dropoff_locations(session: Session, limit: int = 10) -> List[dict]:
-        """Récupérer les principales zones de dépose"""
-        statement = select(
-            YellowTaxiTrip.dolocationid,
-            func.count(YellowTaxiTrip.id).label("trip_count")
-        ).group_by(YellowTaxiTrip.dolocationid).order_by(func.count(YellowTaxiTrip.id).desc()).limit(limit)
-        
-        results = session.exec(statement).all()
-        return [{"location_id": r.dolocationid, "trip_count": r.trip_count} for r in results]
 
 
 class ImportLogCRUD:
@@ -204,6 +75,104 @@ class ImportLogCRUD:
         return session.exec(statement).all()
 
 
+class TaxiTripService:
+    """Service pour les opérations CRUD des trajets taxi"""
+    
+    @staticmethod
+    def get_trip(db: Session, trip_id: int) -> Optional[YellowTaxiTrip]:
+        """Récupérer un trajet par ID"""
+        return db.get(YellowTaxiTrip, trip_id)
+    
+    @staticmethod
+    def get_trips(db: Session, skip: int, limit: int) -> Tuple[List[YellowTaxiTrip], int]:
+        """Récupérer une liste de trajets avec pagination"""
+        # Récupérer le total des trajets
+        total_count = db.exec(select(func.count(YellowTaxiTrip.id))).one()
+        
+        # Récupérer les trajets avec pagination
+        statement = select(YellowTaxiTrip).offset(skip).limit(limit)
+        trips = db.exec(statement).all()
+        
+        return trips, total_count
+    
+    @staticmethod
+    def create_trip(db: Session, trip: TaxiTripCreate) -> YellowTaxiTrip:
+        """Créer un nouveau trajet"""
+        # Convertir le schéma en dictionnaire et exclure les valeurs None
+        trip_data = trip.model_dump(exclude_unset=True)
+        db_trip = YellowTaxiTrip(**trip_data)
+        db.add(db_trip)
+        db.commit()
+        db.refresh(db_trip)
+        return db_trip
+    
+    @staticmethod
+    def update_trip(db: Session, trip_id: int, trip: TaxiTripUpdate) -> Optional[YellowTaxiTrip]:
+        """Mettre à jour un trajet existant"""
+        db_trip = db.get(YellowTaxiTrip, trip_id)
+        if not db_trip:
+            return None
+        
+        # Convertir le schéma en dictionnaire et exclure les valeurs None
+        trip_data = trip.model_dump(exclude_unset=True)
+        
+        for key, value in trip_data.items():
+            setattr(db_trip, key, value)
+        
+        db.commit()
+        db.refresh(db_trip)
+        return db_trip
+    
+    @staticmethod
+    def delete_trip(db: Session, trip_id: int) -> bool:
+        """Supprimer un trajet"""
+        db_trip = db.get(YellowTaxiTrip, trip_id)
+        if not db_trip:
+            return False
+        
+        db.delete(db_trip)
+        db.commit()
+        return True
+    
+    @staticmethod
+    def get_statistics(db: Session) -> Statistics:
+        """Calculer les statistiques (COUNT, MIN, MAX, AVG)"""
+        # Statistiques de distance
+        distance_stats = db.exec(select(
+            func.count(YellowTaxiTrip.trip_distance).label('count'),
+            func.min(YellowTaxiTrip.trip_distance).label('min_distance'),
+            func.max(YellowTaxiTrip.trip_distance).label('max_distance'),
+            func.avg(YellowTaxiTrip.trip_distance).label('avg_distance')
+        )).one()
+        
+        # Statistiques de tarif
+        fare_stats = db.exec(select(
+            func.min(YellowTaxiTrip.total_amount).label('min_fare'),
+            func.max(YellowTaxiTrip.total_amount).label('max_fare'),
+            func.avg(YellowTaxiTrip.total_amount).label('avg_fare')
+        )).one()
+        
+        # Statistiques de passagers
+        passenger_stats = db.exec(select(
+            func.min(YellowTaxiTrip.passenger_count).label('min_passengers'),
+            func.max(YellowTaxiTrip.passenger_count).label('max_passengers'),
+            func.avg(YellowTaxiTrip.passenger_count).label('avg_passengers')
+        )).one()
+        
+        return Statistics(
+            count=distance_stats.count,
+            min_distance=distance_stats.min_distance,
+            max_distance=distance_stats.max_distance,
+            avg_distance=distance_stats.avg_distance,
+            min_fare=fare_stats.min_fare,
+            max_fare=fare_stats.max_fare,
+            avg_fare=fare_stats.avg_fare,
+            min_passengers=passenger_stats.min_passengers,
+            max_passengers=passenger_stats.max_passengers,
+            avg_passengers=passenger_stats.avg_passengers
+        )
+
+
 # Fonctions utilitaires pour la gestion des sessions
 def get_session():
     """Créer une nouvelle session de base de données"""
@@ -224,9 +193,9 @@ if __name__ == "__main__":
         print(f"Log créé: {log}")
         
         # Récupérer les statistiques des voyages
-        stats = YellowTaxiTripCRUD.get_statistics(session)
+        stats = TaxiTripService.get_statistics(session)
         print(f"Statistiques: {stats}")
         
-        # Récupérer les principales zones de prise en charge
-        top_pickup = YellowTaxiTripCRUD.get_top_pickup_locations(session, 5)
-        print(f"Top pickup locations: {top_pickup}")
+        # Récupérer quelques trajets
+        trips, total = TaxiTripService.get_trips(session, skip=0, limit=5)
+        print(f"Trajets récupérés: {len(trips)} sur {total}")

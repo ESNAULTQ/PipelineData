@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copier le code source
 COPY src/ ./src/
-COPY app.py .
+COPY main.py .
 
 # Créer le répertoire data/raw s'il n'existe pas
 RUN mkdir -p data/raw
@@ -27,4 +27,4 @@ RUN mkdir -p data/raw
 EXPOSE 8000
 
 # Commande par défaut pour FastAPI avec uvicorn
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.routes.app:app", "--host", "0.0.0.0", "--port", "8000"]

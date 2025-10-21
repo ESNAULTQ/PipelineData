@@ -53,6 +53,7 @@ class NYCTaxiDataDownloader:
                 print(f"Error downloading file for month {month}")
         return True
 
-nyt = NYCTaxiDataDownloader(2025, 1)
-nyt.download_all_available()
-print("Pipeline de données NYC Taxi initialisé")
+if __name__ == "__main__":
+    nyt = NYCTaxiDataDownloader(2025, 1)
+    nyt.download_all_available()
+    print("Pipeline de données NYC Taxi initialisé")
