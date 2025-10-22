@@ -1,9 +1,11 @@
 import uvicorn
 import pandas as pd
+from pymongo import MongoClient
 from src.routes.app import app
 from src.database import engine
 from src.models.models import YellowTaxiTrip, ImportLog
 from sqlmodel import SQLModel
+import os
 
 class DataCleaner:
     """Classe pour nettoyer les données en chunks"""
@@ -13,7 +15,7 @@ class DataCleaner:
         self.offset = 0
         self.cleaned_data = pd.DataFrame()
     
-    def clean_data(self, df):
+    def clean_data(self):
         """Nettoie les données en chunks"""
         print("Début du nettoyage des données...")
         
@@ -41,6 +43,28 @@ class DataCleaner:
         
         print(f"Total rows processed: {len(self.cleaned_data)}")
         return self.cleaned_data
+    
+    def save_to_mongodb(self, df):
+        """Sauvegarde les données nettoyées dans MongoDB"""
+        print("Sauvegarde des données dans MongoDB...")
+        # Configuration MongoDB
+        user = os.getenv('MONGO_USER')
+        password = os.getenv('MONGO_PASSWORD')
+        host = os.getenv('MONGO_HOST')
+        port = os.getenv('MONGO_PORT')
+        
+        client = MongoClient(f"mongodb://{user}:{password}@{host}:{port}/")
+        
+        # Convertir DataFrame en liste de dictionnaires
+        data_to_save = df.to_dict('records')
+        
+        # Insérer dans MongoDB
+        db = client['taxi_data']
+        collection = db['cleaned_trips']
+        collection.insert_many(data_to_save)
+        
+        print(f"✅ {len(data_to_save)} enregistrements sauvegardés dans MongoDB")
+        client.close()
     
     def close(self):
         """Ferme les connexions et nettoie les ressources"""
@@ -74,7 +98,10 @@ if __name__ == "__main__":
     cleaner = DataCleaner()
     try:
         # Nettoyer
-        cleaned_df = cleaner.clean_data(df)
+        cleaned_df = cleaner.clean_data()
+        
+        # Sauvegarder
+        cleaner.save_to_mongodb(cleaned_df)
     finally:
         cleaner.close()
     
