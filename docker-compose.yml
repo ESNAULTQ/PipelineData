@@ -1,4 +1,3 @@
-version: "3.8"
 services:
     pipeline-postgres:
         image: postgres:15
@@ -42,25 +41,21 @@ services:
                 condition: service_healthy
         command: uvicorn src.routes.app:app --host 0.0.0.0 --port 8000 --reload
 
-
-    mongodb:
-        image: mongo:7
-        container_name: nyc-taxi-mongodb
-        environment:
-            MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
-            MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
-            MONGO_INITDB_DATABASE: ${MONGO_DB}
+    mongo:
+        image: mongo:8.0
+        container_name: mongodb
+        restart: always
         ports:
-            - "${MONGO_PORT}:27017"
+            - "${MONGO_PORT}:27017" # Expose MongoDB on the default port
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER} # Set the admin username
+            MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD} # Set the admin password
         volumes:
-            - mongodb_data:/data/db
-        restart: unless-stopped
-        healthcheck:
-            test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-            interval: 10s
-            timeout: 5s
-            retries: 5
+            - mongo-data:/data/db # Persist MongoDB data
+            - mongo-config:/data/configdb # Persist MongoDB configuration
 
 volumes:
-  postgres_data:
-  mongodb_data:
+    postgres_data:
+    mongo-data:
+        driver: local
+    mongo-config:
