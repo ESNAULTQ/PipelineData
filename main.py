@@ -13,15 +13,26 @@ class DataCleaner:
     def __init__(self):
         self.chunk_size = 100000
         self.offset = 0
-        self.cleaned_data = pd.DataFrame()
     
-    def clean_data(self):
-        """Nettoie les données en chunks"""
-        print("Début du nettoyage des données...")
+    def clean_and_save_data(self):
+        """Nettoie et sauvegarde les données chunk par chunk"""
+        print("Début du nettoyage et sauvegarde des données...")
+        
+        # Configuration MongoDB
+        user = os.getenv('MONGO_USER')
+        password = os.getenv('MONGO_PASSWORD')
+        host = os.getenv('MONGO_HOST')
+        port = os.getenv('MONGO_PORT')
+        
+        client = MongoClient(f"mongodb://{user}:{password}@{host}:{port}/")
+        db = client['taxi_data']
+        collection = db['cleaned_trips']
+        
+        total_processed = 0
         
         while True:
             query = f"""
-                SELECT * 
+                SELECT vendorid, tpep_pickup_datetime, tpep_dropoff_datetime, passenger_count, trip_distance, ratecodeid, store_and_fwd_flag, pulocationid, dolocationid, payment_type, fare_amount, extra, mta_tax, tip_amount, tolls_amount, improvement_surcharge, total_amount, congestion_surcharge, airport_fee, cbd_congestion_fee
                 FROM yellowtaxitrip
                 WHERE (passenger_count >= 0 OR trip_distance >= 0 OR fare_amount >= 0 OR tip_amount >= 0 OR tolls_amount >= 0 OR total_amount >= 0)
                 AND passenger_count BETWEEN 1 and 8
@@ -33,43 +44,28 @@ class DataCleaner:
             """
             
             chunk_df = pd.read_sql(query, engine)
-            
             if chunk_df.empty:
                 break
             
-            self.cleaned_data = pd.concat([self.cleaned_data, chunk_df], ignore_index=True)
+            # Convertir le chunk en liste de dictionnaires
+            chunk_data = chunk_df.to_dict('records')
+            
+            # Insérer le chunk dans MongoDB
+            if chunk_data:
+                collection.insert_many(chunk_data)
+                total_processed += len(chunk_data)
+                print(f"✅ Chunk sauvegardé: {len(chunk_data)} enregistrements (Total: {total_processed})")
+            
             self.offset += self.chunk_size
-            print(f"Processed {self.offset} rows...")
         
-        print(f"Total rows processed: {len(self.cleaned_data)}")
-        return self.cleaned_data
-    
-    def save_to_mongodb(self, df):
-        """Sauvegarde les données nettoyées dans MongoDB"""
-        print("Sauvegarde des données dans MongoDB...")
-        # Configuration MongoDB
-        user = os.getenv('MONGO_USER')
-        password = os.getenv('MONGO_PASSWORD')
-        host = os.getenv('MONGO_HOST')
-        port = os.getenv('MONGO_PORT')
-        
-        client = MongoClient(f"mongodb://{user}:{password}@{host}:{port}/")
-        
-        # Convertir DataFrame en liste de dictionnaires
-        data_to_save = df.to_dict('records')
-        
-        # Insérer dans MongoDB
-        db = client['taxi_data']
-        collection = db['cleaned_trips']
-        collection.insert_many(data_to_save)
-        
-        print(f"✅ {len(data_to_save)} enregistrements sauvegardés dans MongoDB")
+        print(f"✅ Traitement terminé! Total: {total_processed} enregistrements sauvegardés dans MongoDB")
         client.close()
+        return total_processed
+    
     
     def close(self):
         """Ferme les connexions et nettoie les ressources"""
         print("Fermeture du DataCleaner...")
-        self.cleaned_data = pd.DataFrame()
         self.offset = 0
 
 def init_database():
@@ -94,14 +90,12 @@ if __name__ == "__main__":
     # Initialiser la base de données au démarrage
     init_database()
     
-    # Nettoyer les données
+    # Nettoyer et sauvegarder les données chunk par chunk
     cleaner = DataCleaner()
     try:
-        # Nettoyer
-        cleaned_df = cleaner.clean_data()
-        
-        # Sauvegarder
-        cleaner.save_to_mongodb(cleaned_df)
+        # Nettoyer et sauvegarder en une seule opération
+        total_processed = cleaner.clean_and_save_data()
+        print(f"🎉 Traitement terminé avec succès! {total_processed} enregistrements traités.")
     finally:
         cleaner.close()
     
